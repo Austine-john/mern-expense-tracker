@@ -2,32 +2,34 @@ const jwt = require("jsonwebtoken");
 
 const isAuthenticated = async (req, res, next) => {
   try {
-    // 1. Extract token
-    const token = req.headers?.authorization?.split(" ")[1];
-    if (!token) throw new Error("No token provided");
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ status: "fail", message: "No or malformed token provided" });
+    }
 
-    // 2. Verify token synchronously (better for middleware)
-    const decoded = jwt.verify(token, process.env.JWT_SECRET); 
+    const token = authHeader.split(" ")[1];
 
-    // 3. Attach user to request
-    req.user = decoded.id;
+    const secret = process.env.JWT_SECRET;
+    if (!secret) throw new Error("JWT secret not configured");
+
+    const decoded = jwt.verify(token, secret);
+    req.user = decoded; // Attach full payload if needed
+
     next();
-
   } catch (error) {
-    // 4. Handle specific JWT errors
-    if (error.name === 'TokenExpiredError') {
+    if (error.name === "TokenExpiredError") {
       return res.status(401).json({ 
         status: "fail",
-        message: "Token expired, please refresh or login again" 
+        message: "Token expired, please refresh or login again"
       });
     }
 
-    // 5. Other JWT errors (malformed, invalid, etc.)
     res.status(401).json({
       status: "fail",
-      message: "Invalid token, please authenticate"
+      message: process.env.NODE_ENV === "development" ? error.message : "Invalid token, please authenticate"
     });
   }
 };
 
 module.exports = isAuthenticated;
+
